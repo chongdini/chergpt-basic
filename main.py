@@ -31,31 +31,37 @@ if "messages" not in st.session_state:
 # Sidebar setup
 setup_sidebar()
 
+# Fetch API key and Neon DB link from secrets
+anthropic_api_key = st.secrets.get("ANTHROPIC_API_KEY", None)
+neon_db_link = st.secrets.get("NEON_DB_LINK", None)
+
 # Neon DB Connection
-neon_db_link = st.text_input("Enter your Neon DB connection link:")
 conn = None
 if neon_db_link:
     try:
         conn = psycopg2.connect(neon_db_link)
         st.success("Connected to Neon DB successfully!")
     except Exception as e:
-        st.error("Failed to connect to Neon DB. Please check your connection string.")
+        st.error("Failed to connect to Neon DB. Please check your connection string in secrets.")
         logging.error(f"Neon DB connection error: {e}")
+else:
+    st.error("Neon DB connection link is missing in secrets!")
 
 # Initialize database and chatlog
 initialize_db()
 initialize_chatlog_table()
 
 # Anthropics Claude 3.5 Sonnet Client
-anthropic_api_key = st.text_input("Enter your Anthropics API Key (kept secure):", type="password")
 claude_client = None
 if anthropic_api_key:
     try:
         claude_client = anthropic.Client(api_key=anthropic_api_key)
         st.success("Anthropic API initialized successfully!")
     except Exception as e:
-        st.error("Failed to initialize Anthropics API. Please check your API key.")
+        st.error("Failed to initialize Anthropics API. Please check your API key in secrets.")
         logging.error(f"Anthropic API initialization error: {e}")
+else:
+    st.error("Anthropic API key is missing in secrets!")
 
 # Chat UI
 for message in st.session_state.messages:
@@ -114,7 +120,7 @@ if prompt := st.chat_input("What would you like to ask?"):
         related_resources = provide_resources(topic)
         st.markdown("\n\n**Related Resources:**\n" + "\n".join(related_resources))
     else:
-        st.error("Claude API is not initialized. Please enter your API key.")
+        st.error("Claude API is not initialized. Please check your API key.")
 
 # Admin actions
 if st.session_state["is_admin"]:
