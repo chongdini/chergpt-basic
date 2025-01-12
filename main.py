@@ -77,7 +77,7 @@ if prompt := st.chat_input("What would you like to ask?"):
     if claude_client:
         conversation_context = [{"role": "system", "content": get_latest_instructions()}]
         conversation_context += [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-
+    
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response = ""
@@ -90,12 +90,12 @@ if prompt := st.chat_input("What would you like to ask?"):
                     stream=True,
                 )
                 for chunk in response:
-                    if "completion" in chunk:
+                    if "completion" in chunk:  # Check if the key exists
                         full_response += chunk["completion"]
                         message_placeholder.markdown(full_response + "▌")
                     else:
                         logging.warning(f"Unexpected chunk format: {chunk}")
-            except Exception as e:  # Catch all exceptions
+            except Exception as e:  # Handle all exceptions
                 st.error("An error occurred while processing your request.")
                 logging.error(f"Error: {e}")
             finally:
@@ -103,6 +103,7 @@ if prompt := st.chat_input("What would you like to ask?"):
                 if full_response:
                     insert_chat_log(prompt, full_response, st.session_state["conversation_id"])
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
+
 
 
         # Provide resources based on user query
