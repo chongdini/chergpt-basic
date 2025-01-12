@@ -1,5 +1,5 @@
 streamlit
-openai
+anthropic
 psycopg2-binary
 pytest
 streamlit-feedback
