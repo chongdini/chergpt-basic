@@ -1,14 +1,23 @@
 import csv
 import io
 import logging
-from app.db.database_connection import connect_to_db
+import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import openai
-import uuid
-from openai import OpenAI
 import streamlit as st
+import psycopg2
+import anthropic
 
+# Establish a connection to the database using Streamlit Secrets
+def connect_to_db():
+    try:
+        conn = psycopg2.connect(st.secrets["NEON_DB_LINK"])
+        return conn
+    except Exception as e:
+        logging.error(f"Failed to connect to the database: {e}")
+        return None
+
+# Insert a chat log into the database
 def insert_chat_log(prompt, response, conversation_id):
     conn = connect_to_db()
     if conn is None:
@@ -18,7 +27,7 @@ def insert_chat_log(prompt, response, conversation_id):
         conversation_id = str(uuid.uuid4())
     # Get current time in GMT+8 timezone
     now_in_sgt = datetime.now(ZoneInfo("Asia/Singapore"))
-    conversation_uuid = str(uuid.UUID(conversation_id)) 
+    conversation_uuid = str(uuid.UUID(conversation_id))
     try:
         with conn, conn.cursor() as cur:
             cur.execute("""
@@ -30,9 +39,10 @@ def insert_chat_log(prompt, response, conversation_id):
     except Exception as e:
         logging.error(f"Error inserting chat log: {e}")
     finally:
-        if conn is not None:
+        if conn:
             conn.close()
 
+# Initialize the chat logs table
 def initialize_chatlog_table():
     conn = connect_to_db()
     if conn is None:
@@ -58,8 +68,7 @@ def initialize_chatlog_table():
         if conn:
             conn.close()
 
-
-# fetch chatlog
+# Fetch all chat logs from the database
 def fetch_chat_logs():
     conn = connect_to_db()
     if conn is None:
@@ -75,9 +84,10 @@ def fetch_chat_logs():
         logging.error(f"Error fetching chat logs: {e}")
         return []
     finally:
-        if conn is not None:
+        if conn:
             conn.close()
 
+# Batch chat logs by conversation ID
 def fetch_and_batch_chatlogs():
     conn = connect_to_db()
     if conn is None:
@@ -99,10 +109,10 @@ def fetch_and_batch_chatlogs():
         logging.error(f"Error fetching and batching chat logs: {e}")
         return {}
     finally:
-        if conn is not None:
+        if conn:
             conn.close()
 
-
+# Export chat logs to CSV
 def export_chat_logs_to_csv(filename='chat_logs.csv'):
     chat_logs = fetch_chat_logs()
     if not chat_logs:
@@ -113,14 +123,11 @@ def export_chat_logs_to_csv(filename='chat_logs.csv'):
     writer = csv.writer(output)
     # Ensure headers match the database columns, including 'ConversationID'
     writer.writerow(['ID', 'Timestamp', 'Prompt', 'Response', 'ConversationID'])
-    # Iterate through each chat log entry and write to CSV
     for log in chat_logs:
-        writer.writerow(log)  # Directly write the log as it should match the headers
-
-    # Return the CSV content encoded in UTF-8
+        writer.writerow(log)
     return output.getvalue().encode('utf-8-sig')
 
-# delete chatlog
+# Delete all chat logs
 def delete_all_chatlogs():
     conn = connect_to_db()
     if conn is None:
@@ -134,9 +141,10 @@ def delete_all_chatlogs():
     except Exception as e:
         logging.error(f"Error deleting chat logs: {e}")
     finally:
-        if conn is not None:
+        if conn:
             conn.close()
 
+# Drop the chat logs table
 def drop_chatlog_table():
     conn = connect_to_db()
     if conn is None:
@@ -151,49 +159,43 @@ def drop_chatlog_table():
     except Exception as e:
         logging.error(f"Error dropping chatlog table: {e}")
     finally:
-        if conn is not None:
+        if conn:
             conn.close()
 
-
+# Generate summaries for chat logs
 def generate_summary_for_each_group(batches):
     summaries = {}
+    anthropic_api_key = st.secrets.get("ANTHROPIC_API_KEY")
+    if not anthropic_api_key:
+        logging.error("Anthropic API key is missing in secrets.")
+        return summaries
+
+    client = anthropic.Client(api_key=anthropic_api_key)
     for idx, (uuid, logs) in enumerate(batches.items(), start=1):
         combined_logs = "\n".join(logs)
-        # Structuring the system message to include the task for summarization explicitly
-        system_message = "You are a highly intelligent assistant. Your task is to summarize the conversation."
-
-        # Preparing the messages for the chat completion API call
         messages = [
-            {"role": "system", "content": system_message},
+            {"role": "system", "content": "Summarize the following conversation."},
             {"role": "user", "content": combined_logs}
         ]
         try:
-            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+            response = client.completions.create(
+                model="claude-3.5-sonnet",
                 messages=messages,
+                max_tokens_to_sample=300
             )
-            if response and 'choices' in response and len(response['choices']) > 0:
-                summary_text = response.choices[0].message['content'].strip()
-                summaries[uuid] = summary_text  # Store just the summary text here
-            else:
-                summaries[uuid] = "No summary could be generated for this group."
+            summaries[uuid] = response["completion"].strip()
         except Exception as e:
-            summaries[uuid] = "Failed to generate summary due to an error: " + str(e)
+            summaries[uuid] = f"Failed to generate summary: {e}"
     return summaries
 
+# Compile summaries into a structured format
 def compile_summaries(summaries):
-    compiled_output = "Top level summary:\n"
+    compiled_output = "Top-level summary:\n"
     for idx, (uuid, summary) in enumerate(summaries.items(), start=1):
         compiled_output += f"\nGroup {idx} summary (UUID {uuid}):\n{summary}\n"
     return compiled_output
 
-
-# Fetch and batch the chat logs by UUID
+# Fetch, summarize, and compile chat logs
 batches = fetch_and_batch_chatlogs()
-
-# Generate a summary for each group
 group_summaries = generate_summary_for_each_group(batches)
-
-# Compile the individual group summaries into a structured format
 final_summary_output = compile_summaries(group_summaries)
