@@ -1,0 +1,142 @@
+from flask import Flask, request, jsonify, session
+from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import json
+import csv
+import io
+
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+# Simulated database for users and chat logs
+data_store = {
+    "users": {},  # {username: {"password": hashed_password, "chat_logs": []}}
+}
+
+# Example resource database based on topics
+resources = {
+    "python_basics": [
+        "https://www.w3schools.com/python/",
+        "https://realpython.com/",
+        "https://www.codecademy.com/learn/learn-python-3",
+    ],
+    "data_structures": [
+        "https://visualgo.net/en",
+        "https://www.geeksforgeeks.org/data-structures/",
+        "https://www.youtube.com/watch?v=RBSGKlAvoiM",
+    ],
+    # Add more topics and resources as needed
+}
+
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.json
+    username = data.get("username")
+    password = data.get("password")
+
+    if username in data_store["users"]:
+        return jsonify({"message": "Username already exists!"}), 400
+
+    hashed_password = generate_password_hash(password)
+    data_store["users"][username] = {"password": hashed_password, "chat_logs": []}
+    return jsonify({"message": "Registration successful!"}), 200
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.json
+    username = data.get("username")
+    password = data.get("password")
+
+    user = data_store["users"].get(username)
+    if user and check_password_hash(user["password"], password):
+        session["username"] = username
+        return jsonify({"message": "Login successful!"}), 200
+    return jsonify({"message": "Invalid username or password!"}), 400
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.pop("username", None)
+    return jsonify({"message": "Logged out successfully!"}), 200
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    if "username" not in session:
+        return jsonify({"message": "Please log in to chat."}), 401
+
+    data = request.json
+    query = data.get("query")
+
+    # Simulated chatbot response logic
+    response = f"Here's the answer to your query: {query}"  # Replace with actual chatbot logic
+
+    # Append relevant resources
+    topic = identify_topic(query)
+    if topic in resources:
+        response += "\n\nAdditional Resources:\n" + "\n".join(resources[topic])
+
+    # Save chat log
+    username = session["username"]
+    data_store["users"][username]["chat_logs"].append({"query": query, "response": response})
+
+    return jsonify({"response": response}), 200
+
+@app.route("/bookmark", methods=["POST"])
+def bookmark():
+    if "username" not in session:
+        return jsonify({"message": "Please log in to bookmark responses."}), 401
+
+    data = request.json
+    query = data.get("query")
+
+    username = session["username"]
+    chat_logs = data_store["users"][username]["chat_logs"]
+
+    for log in chat_logs:
+        if log["query"] == query:
+            if "bookmarked" not in log:
+                log["bookmarked"] = True
+                return jsonify({"message": "Response bookmarked successfully!"}), 200
+            return jsonify({"message": "Response already bookmarked."}), 400
+
+    return jsonify({"message": "Query not found."}), 404
+
+@app.route("/saved", methods=["GET"])
+def saved():
+    if "username" not in session:
+        return jsonify({"message": "Please log in to view saved responses."}), 401
+
+    username = session["username"]
+    chat_logs = data_store["users"][username]["chat_logs"]
+    bookmarks = [log for log in chat_logs if log.get("bookmarked")]
+
+    return jsonify({"saved_responses": bookmarks}), 200
+
+@app.route("/download", methods=["GET"])
+def download():
+    if "username" not in session:
+        return jsonify({"message": "Please log in to download chat logs."}), 401
+
+    username = session["username"]
+    chat_logs = data_store["users"][username]["chat_logs"]
+
+    # Generate CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Query", "Response", "Bookmarked"])
+    for log in chat_logs:
+        writer.writerow([log.get("query"), log.get("response"), log.get("bookmarked", False)])
+
+    output.seek(0)
+    return jsonify({"file_content": output.getvalue()}), 200
+
+# Utility function to identify topic based on query
+def identify_topic(query):
+    query = query.lower()
+    if "python" in query:
+        return "python_basics"
+    elif "data structure" in query:
+        return "data_structures"
+    return "general"
+
+if __name__ == "__main__":
+    app.run(debug=True)
