@@ -90,14 +90,22 @@ if prompt := st.chat_input("What would you like to ask?"):
                     stream=True,
                 )
                 for chunk in response:
-                    full_response += chunk["completion"]
-                    message_placeholder.markdown(full_response + "▌")
+                    if "completion" in chunk:  # Check if the key exists
+                        full_response += chunk["completion"]
+                        message_placeholder.markdown(full_response + "▌")
+                    else:
+                        logging.warning(f"Unexpected chunk format: {chunk}")
+            except anthropic.exceptions.AnthropicException as e:
+                st.error("An Anthropic API error occurred.")
+                logging.error(f"Anthropic API error: {e}")
             except Exception as e:
-                st.error("An error occurred while processing your request.")
-                logging.error(f"Claude API error: {e}")
-            message_placeholder.markdown(full_response)
-        insert_chat_log(prompt, full_response, st.session_state["conversation_id"])
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+                st.error("An unexpected error occurred while processing your request.")
+                logging.error(f"Unexpected error: {e}")
+            finally:
+                message_placeholder.markdown(full_response)
+                if full_response:
+                    insert_chat_log(prompt, full_response, st.session_state["conversation_id"])
+                    st.session_state.messages.append({"role": "assistant", "content": full_response})
 
         # Provide resources based on user query
         def provide_resources(topic):
