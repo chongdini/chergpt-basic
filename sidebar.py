@@ -3,8 +3,8 @@ from app.chatlog.chatlog_handler import compile_summaries, delete_all_chatlogs, 
 from app.instructions.instructions_handler import get_latest_instructions, update_instructions
 from app.db.database_connection import  drop_instructions_table, get_app_description, update_app_description, get_app_title, update_app_title
 custominstructions_area_height = 300
-app_title = get_app_title()
-app_description = get_app_description()
+app_title = 'CherGPT-C: Your Computing Companion'
+app_description = 'CherGPT-C is a specialized chatbot designed to provide expert assistance in computing. Whether you're coding, troubleshooting, or diving into advanced topics like algorithms, cybersecurity, or software development, CherGPT-C delivers clear, accurate, and reliable solutions. With a knack for breaking down complex problems and offering step-by-step guidance, it's the perfect ally for developers, students, and tech enthusiasts alike. From debugging to conceptual clarity, CherGPT-C ensures your computing journey is smooth, productive, and empowering.'
 
 def load_summaries():
     # Placeholder function call - replace with actual function logic
