@@ -11,40 +11,7 @@ from app.db.database_connection import get_app_description, get_app_title, initi
 from app.instructions.instructions_handler import get_latest_instructions
 import uuid
 
-client = anthropic.Anthropic(
-    # defaults to os.environ.get("ANTHROPIC_API_KEY")
-    api_key="my_api_key",
-)
 
-# Replace placeholders like {{CHATBOT_CODE}} with real values,
-# because the SDK does not support variables.
-message = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
-    max_tokens=4096,
-    temperature=0,
-    system="e:\n\n### Key Features Added:\n1. **Resource Integration**:\n   - Responses include links to external tutorials, practice exercises, or videos based on the query topic.\n\n2. **Saving and Bookmarking**:\n   - Users can bookmark specific responses.\n   - Saved chat logs and bookmarks are accessible in their account.\n\n3. **Account System**:\n   - Users can register, log in, and log out.\n   - Chat logs and bookmarks are associated with individual accounts.\n\n4. **Topic Identification**:\n   - Topics are determined dynamically, allowing for resource suggestions tailored to the user's query.\n\n",
-    messages=[
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "You are an AI assistant tasked with helping users understand and interact with a chatbot system. You will be provided with the chatbot's code and user queries about the system. Your role is to analyze the code, understand its functionality, and provide helpful responses to user questions.\n\nHere is the chatbot code:\n<chatbot_code>\n{{CHATBOT_CODE}}\n</chatbot_code>\n\nPlease carefully analyze the code above, paying attention to its structure, features, and functionality. When responding to user queries, keep the following instructions in mind:\n\n1. Provide accurate information based solely on the code provided. Do not make assumptions about features or functionality that are not explicitly shown in the code.\n\n2. If a user asks about a feature that is not present in the code, politely explain that the feature is not implemented in the current version of the chatbot.\n\n3. When explaining functionality, use simple language and avoid technical jargon unless specifically asked for technical details.\n\n4. If appropriate, suggest how users might interact with the chatbot based on its implemented features.\n\n5. If a user asks how to implement a new feature, provide a high-level explanation of how it might be integrated into the existing code structure, but do not write actual code unless specifically requested.\n\nWhen you receive a user query, follow these steps:\n\n1. Analyze the query to understand what the user is asking about.\n2. Review the chatbot code to find relevant information.\n3. Formulate a clear and concise response that directly addresses the user's question.\n4. If applicable, provide examples of how the user might interact with the relevant feature.\n\nFormat your response as follows:\n<response>\n[Your detailed answer to the user's query]\n\n[If applicable, an example of how to use the feature]\n\n[If relevant, a brief suggestion for further exploration or usage of the chatbot]\n</response>\n\nHere is the user's query:\n<user_query>\n{{USER_QUERY}}\n</user_query>\n\nPlease provide your response to the user's query based on the instructions given."
-                }
-            ]
-        },
-        {
-            "role": "assistant",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "I notice that both the provided chatbot code and user query appear to be just numbers (10 and 100 respectively) rather than actual code or a specific question. Without a proper code implementation or a clear user question, I cannot provide a meaningful analysis or response.\n\nTo properly assist, I would need:\n\n1. The actual chatbot code implementation showing its features and functionality\n2. A specific question or query from the user about the chatbot system\n\nCould you please provide:\n- The complete chatbot code showing its implementation details\n- A clear question from the user about the chatbot's functionality or usage\n\nThis will allow me to provide an accurate and helpful response following the structured format you've outlined."
-                }
-            ]
-        }
-    ]
-)
-print(message.content)
 # Streamlit page configuration
 st.set_page_config(page_title="Teaching & Learning Chatbot", page_icon=":books:", layout="wide")
 
