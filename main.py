@@ -1,19 +1,30 @@
 import datetime
 import io
 import csv
-import anthropic
 import logging
-import streamlit as st
-import psycopg2
-from app.chatlog.chatlog_handler import insert_chat_log, initialize_chatlog_table
-from sidebar import setup_sidebar
-from app.db.database_connection import get_app_description, get_app_title, initialize_db, update_app_description
-from app.instructions.instructions_handler import get_latest_instructions
 import uuid
 
+import anthropic
+import psycopg2
+import streamlit as st
+
+from app.chatlog.chatlog_handler import insert_chat_log, initialize_chatlog_table
+from app.db.database_connection import (
+    get_app_description,
+    get_app_title,
+    initialize_db,
+    update_app_description,
+)
+from app.instructions.instructions_handler import get_latest_instructions
+from sidebar import setup_sidebar
+
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO)
 
 # Streamlit page configuration
-st.set_page_config(page_title="Teaching & Learning Chatbot", page_icon=":books:", layout="wide")
+st.set_page_config(
+    page_title="Teaching & Learning Chatbot", page_icon=":books:", layout="wide"
+)
 
 # Initialize app title and description
 app_title = get_app_title()
@@ -27,14 +38,14 @@ if "is_admin" not in st.session_state:
 if "conversation_id" not in st.session_state:
     st.session_state["conversation_id"] = str(uuid.uuid4())
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state["messages"] = []
 
 # Sidebar setup
 setup_sidebar()
 
 # Fetch API key and Neon DB link from secrets
-anthropic_api_key = st.secrets.get("ANTHROPIC_API_KEY", None)
-neon_db_link = st.secrets.get("NEON_DB_LINK", None)
+anthropic_api_key = st.secrets.get("ANTHROPIC_API_KEY")
+neon_db_link = st.secrets.get("NEON_DB_LINK")
 
 # Neon DB Connection
 conn = None
@@ -64,20 +75,43 @@ if anthropic_api_key:
 else:
     st.error("Anthropic API key is missing in secrets!")
 
-# Chat UI
-for message in st.session_state.messages:
+# Define a helper function to provide related resources.
+def provide_resources(topic: str):
+    resources = {
+        "Python": [
+            "Python Official Docs: https://docs.python.org",
+            "W3Schools Python Tutorial: https://www.w3schools.com/python/",
+        ],
+        "Machine Learning": [
+            "ML Crash Course by Google: https://developers.google.com/machine-learning/crash-course",
+            "Scikit-learn User Guide: https://scikit-learn.org/stable/user_guide.html",
+        ],
+        "Web Development": [
+            "MDN Web Docs: https://developer.mozilla.org",
+            "FreeCodeCamp: https://www.freecodecamp.org/",
+        ],
+    }
+    return resources.get(topic, ["Explore more at: https://www.google.com"])
+
+# Chat UI: Display existing messages
+for message in st.session_state["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Chat input handling
 if prompt := st.chat_input("What would you like to ask?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     # Generate assistant response with Claude
     if claude_client:
+        # Build conversation context (system instructions + message history)
         conversation_context = [{"role": "system", "content": get_latest_instructions()}]
-        conversation_context += [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+        conversation_context += [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state["messages"]
+        ]
     
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
@@ -91,38 +125,30 @@ if prompt := st.chat_input("What would you like to ask?"):
                     stream=True,
                 )
                 for chunk in response:
-                    if "completion" in chunk:  # Check if the key exists
+                    if "completion" in chunk:
                         full_response += chunk["completion"]
                         message_placeholder.markdown(full_response + "▌")
                     else:
                         logging.warning(f"Unexpected chunk format: {chunk}")
-            except Exception as e:  # Handle all exceptions
+            except Exception as e:
                 st.error("An error occurred while processing your request.")
                 logging.error(f"Error: {e}")
             finally:
                 message_placeholder.markdown(full_response)
                 if full_response:
                     insert_chat_log(prompt, full_response, st.session_state["conversation_id"])
-                    st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-
-
-        # Provide resources based on user query
-        def provide_resources(topic):
-            resources = {
-                "Python": ["Python Official Docs: https://docs.python.org", "W3Schools Python Tutorial: https://www.w3schools.com/python/"],
-                "Machine Learning": ["ML Crash Course by Google: https://developers.google.com/machine-learning/crash-course", "Scikit-learn User Guide: https://scikit-learn.org/stable/user_guide.html"],
-                "Web Development": ["MDN Web Docs: https://developer.mozilla.org", "FreeCodeCamp: https://www.freecodecamp.org/"],
-            }
-            return resources.get(topic, ["Explore more at: https://www.google.com"])
+                    st.session_state["messages"].append(
+                        {"role": "assistant", "content": full_response}
+                    )
 
         # Detect topic and suggest resources
-        topic = "General"  # Replace with NLP-based topic detection logic if needed
-        if "python" in prompt.lower():
+        topic = "General"  # Default topic
+        lower_prompt = prompt.lower()  # Avoid multiple lower() calls
+        if "python" in lower_prompt:
             topic = "Python"
-        elif "machine learning" in prompt.lower():
+        elif "machine learning" in lower_prompt:
             topic = "Machine Learning"
-        elif "web" in prompt.lower():
+        elif "web" in lower_prompt:
             topic = "Web Development"
 
         related_resources = provide_resources(topic)
@@ -144,7 +170,7 @@ if st.button("Download Conversation"):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Role", "Message"])
-    for msg in st.session_state.messages:
+    for msg in st.session_state["messages"]:
         writer.writerow([msg["role"], msg["content"]])
     st.download_button(
         "Download Chat Log",
