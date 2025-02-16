@@ -3,28 +3,22 @@ import io
 import csv
 import logging
 import uuid
+from zoneinfo import ZoneInfo
 
-import anthropic
-import psycopg2
 import streamlit as st
+import psycopg2
+import anthropic
 
 from app.chatlog.chatlog_handler import insert_chat_log, initialize_chatlog_table
-from app.db.database_connection import (
-    get_app_description,
-    get_app_title,
-    initialize_db,
-    update_app_description,
-)
-from app.instructions.instructions_handler import get_latest_instructions
 from sidebar import setup_sidebar
+from app.db.database_connection import get_app_description, get_app_title, initialize_db, update_app_description
+from app.instructions.instructions_handler import get_latest_instructions
 
-# Set up logging configuration
+# Configure logging to display INFO level messages.
 logging.basicConfig(level=logging.INFO)
 
 # Streamlit page configuration
-st.set_page_config(
-    page_title="Teaching & Learning Chatbot", page_icon=":books:", layout="wide"
-)
+st.set_page_config(page_title="Teaching & Learning Chatbot", page_icon=":books:", layout="wide")
 
 # Initialize app title and description
 app_title = get_app_title()
@@ -47,7 +41,7 @@ setup_sidebar()
 anthropic_api_key = st.secrets.get("ANTHROPIC_API_KEY")
 neon_db_link = st.secrets.get("NEON_DB_LINK")
 
-# Neon DB Connection
+# Neon DB Connection: using NEON_DB_LINK consistently
 conn = None
 if neon_db_link:
     try:
@@ -63,7 +57,7 @@ else:
 initialize_db()
 initialize_chatlog_table()
 
-# Anthropics Claude 3.5 Sonnet Client
+# Initialize Anthropics Claude 3.5 Sonnet Client
 claude_client = None
 if anthropic_api_key:
     try:
@@ -74,24 +68,6 @@ if anthropic_api_key:
         logging.error(f"Anthropic API initialization error: {e}")
 else:
     st.error("Anthropic API key is missing in secrets!")
-
-# Define a helper function to provide related resources.
-def provide_resources(topic: str):
-    resources = {
-        "Python": [
-            "Python Official Docs: https://docs.python.org",
-            "W3Schools Python Tutorial: https://www.w3schools.com/python/",
-        ],
-        "Machine Learning": [
-            "ML Crash Course by Google: https://developers.google.com/machine-learning/crash-course",
-            "Scikit-learn User Guide: https://scikit-learn.org/stable/user_guide.html",
-        ],
-        "Web Development": [
-            "MDN Web Docs: https://developer.mozilla.org",
-            "FreeCodeCamp: https://www.freecodecamp.org/",
-        ],
-    }
-    return resources.get(topic, ["Explore more at: https://www.google.com"])
 
 # Chat UI: Display existing messages
 for message in st.session_state["messages"]:
@@ -106,12 +82,8 @@ if prompt := st.chat_input("What would you like to ask?"):
 
     # Generate assistant response with Claude
     if claude_client:
-        # Build conversation context (system instructions + message history)
         conversation_context = [{"role": "system", "content": get_latest_instructions()}]
-        conversation_context += [
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state["messages"]
-        ]
+        conversation_context += [{"role": m["role"], "content": m["content"]} for m in st.session_state["messages"]]
     
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
@@ -137,13 +109,28 @@ if prompt := st.chat_input("What would you like to ask?"):
                 message_placeholder.markdown(full_response)
                 if full_response:
                     insert_chat_log(prompt, full_response, st.session_state["conversation_id"])
-                    st.session_state["messages"].append(
-                        {"role": "assistant", "content": full_response}
-                    )
+                    st.session_state["messages"].append({"role": "assistant", "content": full_response})
 
-        # Detect topic and suggest resources
-        topic = "General"  # Default topic
-        lower_prompt = prompt.lower()  # Avoid multiple lower() calls
+        # Provide resources based on user query
+        def provide_resources(topic):
+            resources = {
+                "Python": [
+                    "Python Official Docs: https://docs.python.org",
+                    "W3Schools Python Tutorial: https://www.w3schools.com/python/"
+                ],
+                "Machine Learning": [
+                    "ML Crash Course by Google: https://developers.google.com/machine-learning/crash-course",
+                    "Scikit-learn User Guide: https://scikit-learn.org/stable/user_guide.html"
+                ],
+                "Web Development": [
+                    "MDN Web Docs: https://developer.mozilla.org",
+                    "FreeCodeCamp: https://www.freecodecamp.org/"
+                ],
+            }
+            return resources.get(topic, ["Explore more at: https://www.google.com"])
+
+        topic = "General"
+        lower_prompt = prompt.lower()
         if "python" in lower_prompt:
             topic = "Python"
         elif "machine learning" in lower_prompt:
@@ -162,7 +149,8 @@ if st.session_state["is_admin"]:
     new_title = st.text_input("Edit App Title", value=app_title)
     new_description = st.text_area("Edit App Description", value=app_description)
     if st.button("Save Changes"):
-        update_app_description(new_title, new_description)
+        # Update only the description (as update_app_description expects one argument)
+        update_app_description(new_description)
         st.success("Application details updated successfully!")
 
 # Save conversation option
